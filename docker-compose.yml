@@ -1,0 +1,29 @@
+version: '3.8'
+
+services: 
+    artifacts:
+        image: localstack/localstack
+        environment: 
+            - LOCALSTACK_SERVICES=s3
+        ports:
+            - "4566-4599:4566-4599"
+            - "${PORT_WEB_UI-8080}:${PORT_WEB_UI-8080}"
+        networks: 
+            - mlflow
+        
+    
+    db:
+        image: mysql:8.0
+        ports:
+            - 3306:3306
+        networks:
+            - mlflow
+        environment:
+            - MYSQL_DATABASE=${MYSQL_DATABASE:-mlflow}
+            - MYSQL_USER=${MYSQL_USER:-mlflow}
+            - MYSQL_PASSWORD=${MYSQL_PASSWORD:-mlflow}
+            - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-mlflow}
+        volumes:
+            - dbdata:/var/lib/mysql
+    
+    
