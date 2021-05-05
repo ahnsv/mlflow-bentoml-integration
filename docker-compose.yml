@@ -2,18 +2,33 @@ version: '3.8'
 
 services: 
     artifacts:
-        image: localstack/localstack
+        image: minio/minio:latest
         container_name: artifacts
-        environment: 
-            - LOCALSTACK_SERVICES=s3
         ports:
-            - "4566-4599:4566-4599"
-            - "${PORT_WEB_UI-8080}:${PORT_WEB_UI-8080}"
-        networks: 
-            - mlflow
-        volumes: 
-            - ./create_bucket.sh:/docker-entrypoint-initaws.d
-        
+          - 9000:9000
+        environment:
+          - MINIO_ACCESS_KEY=${AWS_ACCESS_KEY_ID:-mlflow}
+          - MINIO_SECRET_KEY=${AWS_SECRET_ACCESS_KEY:-mlflowmlflowmlflow}
+        command: 
+          server /mlflow
+        networks:
+          - mlflow
+        volumes:
+          - ./artifacts:/mlflow
+
+    bucket_creator:
+        image: minio/mc
+        container_name: bucket_creator
+        depends_on:
+            - artifacts
+        entrypoint: >
+            /bin/sh -c "
+            /usr/bin/mc config host add artifacts http://minio:9000 ${AWS_ACCESS_KEY_ID:-mlflow} ${AWS_SECRET_ACCESS_KEY:-mlflowmlflowmlflow};
+            /usr/bin/mc rm -r --force artifacts/mlflow;
+            /usr/bin/mc mb artifacts/mlflow;
+            /usr/bin/mc policy download artifacts/mlflow;
+            exit 0;
+            "
     
     db:
         image: mysql/mysql-server:8.0-aarch64
@@ -35,6 +50,7 @@ services:
         depends_on: 
             - db
             - artifacts
+            - bucket_creator
         build: 
             context: ./mlflow
             dockerfile: Dockerfile
@@ -44,9 +60,9 @@ services:
             - mlflow
         environment: 
             - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-mlflow}
-            - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-mlflow}
+            - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-mlflowmlflowmlflow}
             - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
-            - MLFLOW_S3_ENDPOINT_URL=http://artifacts:4566
+            - MLFLOW_S3_ENDPOINT_URL=http://artifacts:9000
         entrypoint: mlflow server --backend-store-uri mysql+pymysql://${MYSQL_USER:-mlflow}:${MYSQL_PASSWORD:-mlflow}@db:3306/${MYSQL_DATABASE:-mlflow} --default-artifact-root s3://mlflow/ -h 0.0.0.0
 
 networks: 
